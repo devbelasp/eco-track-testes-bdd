@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pagina de coletas",
+  "description": "Resposta da listagem paginada. Exige apenas o campo content, com itens no formato de coleta.",
+  "type": "object",
+  "required": ["content"],
+  "properties": {
+    "content": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/coleta" }
+    }
+  },
+  "definitions": {
+    "coleta": {
+      "type": "object",
+      "required": ["id", "empresaGeradora", "categoriaResiduo", "pesoKg", "dataAgendamento", "statusDestinacao"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "empresaGeradora": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "categoriaResiduo": {
+          "type": "string",
+          "enum": ["PLASTICO", "PAPEL_PAPELAO", "LIXO_ELETRONICO", "METAIS", "VIDRO"]
+        },
+        "pesoKg": { "type": "number", "exclusiveMinimum": 0 },
+        "dataAgendamento": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "statusDestinacao": {
+          "type": "string",
+          "enum": ["AGENDADO", "EM_TRANSPORTE", "DESTINADO_CORRETAMENTE"]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,140 @@
+# CI - Integracao Continua
+# Roda em todo push e em todo Pull Request para develop/main. Tambem pode ser disparado
+# manualmente (aba Actions > CI > Run workflow).
+#   1) build-and-test : compila a API e roda os testes dela (JUnit/MockMvc) em PostgreSQL real
+#   2) testes-bdd     : sobe API + PostgreSQL com Docker Compose e roda os testes BDD
+#                       (Cucumber + Gherkin + Rest Assured + JSON Schema)
+#   3) docker-build   : valida o Dockerfile (apenas em Pull Request)
+# Se qualquer job falhar, o pipeline fica vermelho e o merge deve ser bloqueado.
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build e testes da API
+    runs-on: ubuntu-latest
+
+    # PostgreSQL real, usado pelos testes de integracao da API
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ecotrack_test
+          POSTGRES_USER: ecotrack
+          POSTGRES_PASSWORD: ecotrack_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ecotrack -d ecotrack_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # Os testes leem a conexao destas variaveis; sem elas (execucao local), usam H2
+    env:
+      TEST_DATABASE_URL: jdbc:postgresql://localhost:5432/ecotrack_test
+      TEST_DATABASE_USER: ecotrack
+      TEST_DATABASE_PWD: ecotrack_test
+
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build e testes automatizados da API
+        run: mvn -B verify
+
+      - name: Publicar relatorio dos testes da API
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-testes-api
+          path: target/surefire-reports
+          if-no-files-found: ignore
+
+  testes-bdd:
+    name: Testes BDD (Cucumber)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      # Valores de teste descartaveis: o banco existe so durante este job
+      - name: Criar o arquivo .env a partir do exemplo
+        run: cp .env.example .env
+
+      # Sobe PostgreSQL e API em containers e espera os dois ficarem saudaveis (--wait)
+      - name: Subir API e PostgreSQL com Docker Compose
+        run: docker compose up --build -d --wait
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: tests-bdd/pom.xml
+
+      # Executa a suite completa (@regressivo) contra a API real, que grava no PostgreSQL real
+      - name: Executar testes BDD
+        run: mvn -B -f tests-bdd/pom.xml clean test
+        env:
+          BASE_URL: http://localhost:8080
+
+      - name: Publicar relatorio do Cucumber
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-cucumber
+          path: tests-bdd/target/cucumber-reports
+          if-no-files-found: ignore
+
+      - name: Mostrar logs da API (somente se algo falhou)
+        if: failure()
+        run: docker compose logs api db
+
+      - name: Derrubar os containers e apagar o volume
+        if: always()
+        run: docker compose down -v
+
+  docker-build:
+    name: Build da imagem Docker
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    # Apenas em Pull Request
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Baixar o codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Valida o Dockerfile em todo PR. Nao publica nada (push: false)
+      - name: Build da imagem (sem publicar)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: eco-track:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

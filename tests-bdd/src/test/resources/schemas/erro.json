@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Erro simples",
+  "description": "Erros 400 (JSON ou id invalido), 404 e 409: apenas {\"erro\": \"mensagem\"}",
+  "type": "object",
+  "required": ["erro"],
+  "additionalProperties": false,
+  "properties": {
+    "erro": { "type": "string", "minLength": 1 }
+  }
+}
