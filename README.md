@@ -85,11 +85,18 @@ docker compose up --build -d --wait
 # 3. Rode os testes BDD (em um container, contra a API acima)
 docker compose --profile tests run --rm tests
 
-# 4. Ao terminar, derrube tudo (o -v apaga o volume do banco)
+# 4. (Opcional) Rode só os testes rápidos, marcados com @smoke
+docker compose --profile tests run --rm tests mvn -B test -Dtest=SmokeRunner
+
+# 5. Ao terminar, derrube tudo (o -v apaga o volume do banco)
 docker compose down -v
 ```
 
+Na primeira vez, o passo 3 demora alguns minutos porque baixa as dependências do Maven.
 O relatório HTML fica em `tests-bdd/target/cucumber-reports/regressivo.html`.
+
+**Resultado esperado:** `24 Scenarios (24 passed)`, `108 Steps (108 passed)` e `BUILD SUCCESS`
+na suíte completa; `4 Scenarios (4 passed)` e `19 Steps (19 passed)` no smoke.
 
 ### Opção B – Maven na sua máquina
 
@@ -109,6 +116,15 @@ Se a API estiver em outro endereço, informe a URL: `BASE_URL=http://localhost:8
 
 Instale o plugin **Cucumber for Java**, abra a pasta `tests-bdd` como projeto Maven, abra qualquer arquivo
 `.feature` e clique no botão ▶ ao lado de um cenário. Ou execute a classe `runner.TestRunner`.
+
+### Problemas comuns
+
+| Sintoma | Solução |
+|---|---|
+| `Cannot connect to the Docker daemon` | Abra o Docker Desktop e espere ele iniciar |
+| `port is already allocated` (8080 ou 5432) | Outro programa usa a porta. Pare-o ou mude `APP_PORT` / `DB_PORT` no `.env` (e use `BASE_URL` na opção B) |
+| A API fica `unhealthy` | Veja o motivo com `docker compose logs api`. Se mudou a senha no `.env` depois de subir, rode `docker compose down -v` e suba de novo |
+| `.env` não encontrado | Execute o passo 1 (copiar `.env.example`) na raiz do repositório |
 
 ### Relatórios gerados
 
