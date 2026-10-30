@@ -2,12 +2,12 @@
 # Subir API e banco:   docker compose up --build -d --wait
 # Rodar os testes BDD: docker compose --profile tests run --rm tests
 # (copie .env.example para .env antes)
-name: eco-track
+name: eco-track-bdd
 
 services:
   db:
     image: postgres:16-alpine
-    container_name: ecotrack-db
+    container_name: ecotrack-bdd-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?Defina POSTGRES_DB no arquivo .env}
@@ -17,7 +17,6 @@ services:
       # Publicada so em localhost, para acessar com DBeaver/pgAdmin se quiser
       - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
-      # Volume nomeado: os dados sobrevivem a "docker compose down"
       - db_data:/var/lib/postgresql/data
     networks:
       - ecotrack-net
@@ -29,7 +28,7 @@ services:
 
   api:
     build: .
-    container_name: ecotrack-api
+    container_name: ecotrack-bdd-api
     restart: unless-stopped
     depends_on:
       db:
